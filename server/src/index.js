@@ -93,6 +93,11 @@ async function fetchFromAsColour(path, init = {}) {
 // API Routes
 // -----------------------------------------------------
 
+
+app.get("/",(_req,res)=>{
+  res.send("Hello World from AsColour API Server Backend");
+})
+
 app.get("/api/products", async (_req, res) => {
   try {
     const data = await fetchFromAsColour("/catalog/products/");
