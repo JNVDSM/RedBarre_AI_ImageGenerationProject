@@ -89,7 +89,7 @@ export default function CreatorImageGenerationPage() {
     saveCreatorWorkflow(updatedData)
   
     try {
-      const generateImageUrl = `${import.meta.env.VITE_API_BASE_URL}/api/generate-image`
+      const generateImageUrl = `${import.meta.env.VITE_API_BASE_URL}api/generate-image`
 
       // Create FormData
       const formData = new FormData()
