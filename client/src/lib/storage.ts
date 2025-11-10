@@ -207,6 +207,12 @@ export function clearCreatorWorkflow(): void {
   }
 }
 
+export interface GeneratedImageAsset {
+  color?: string
+  url: string
+  key?: string
+}
+
 export interface GeneratedImageEntry {
   id: string
   image: string
@@ -218,6 +224,9 @@ export interface GeneratedImageEntry {
     productType?: string
   }
   selectedColors: string[]
+  source?: "base64" | "url"
+  metadata?: Record<string, any> | null
+  assets?: GeneratedImageAsset[]
 }
 
 export function getGeneratedImages(): GeneratedImageEntry[] {

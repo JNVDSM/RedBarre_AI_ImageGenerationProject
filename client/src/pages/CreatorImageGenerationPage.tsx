@@ -3,7 +3,12 @@ import { useNavigate } from "react-router-dom"
 import { ArrowLeft, Sparkles, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { getCreatorWorkflow, saveCreatorWorkflow, saveGeneratedImage } from "@/lib/storage"
+import {
+  getCreatorWorkflow,
+  saveCreatorWorkflow,
+  saveGeneratedImage,
+  type GeneratedImageAsset,
+} from "@/lib/storage"
 import { fetchProductImages } from "@/lib/api"
 import type { ProductImage } from "@/types/product"
 
@@ -85,7 +90,7 @@ export default function CreatorImageGenerationPage() {
   
     try {
       const generateImageUrl = "/api/generate-image"
-  
+
       // Create FormData
       const formData = new FormData()
       formData.append("prompt", detailedPrompt)
@@ -110,32 +115,90 @@ export default function CreatorImageGenerationPage() {
         const logoImageBlob = await fetch(workflowData.logoImage).then((r) => r.blob())
         formData.append("logo_image", logoImageBlob, "logo_image.jpg")
       }
-  
+
       if (updatedData.selectedColors?.length) {
         updatedData.selectedColors.forEach((color: string) => formData.append("selectedColors", color))
       }
-  
+
       const response = await fetch(generateImageUrl, {
         method: "POST",
         body: formData,
       })
-  
-      const result = await response.json().catch((err) => console.error(err))
-  
-      if (!response.ok || !result?.success) {
-        throw new Error(result?.data?.detail || `Request failed with status ${result?.status ?? response.status}`)
+
+      const result = await response.json().catch((err) => {
+        console.error("Error parsing image generation response:", err)
+        return null
+      })
+
+      const requestFailed = !response.ok || !result?.success
+      if (requestFailed) {
+        const errorDetail =
+          typeof result?.data === "object" && result?.data !== null
+            ? result?.data?.detail || result?.data?.message
+            : null
+        throw new Error(errorDetail || `Request failed with status ${result?.status ?? response.status}`)
       }
-  
-      // Decode base64 to image
-      const image = `data:image/jpeg;base64,${result.data}`
-  
-      if (!image) {
+
+      const upstreamPayload = result?.data
+
+      if (
+        upstreamPayload &&
+        typeof upstreamPayload === "object" &&
+        "success" in upstreamPayload &&
+        upstreamPayload?.success === false
+      ) {
+        const detail =
+          Array.isArray(upstreamPayload.detail) && upstreamPayload.detail.length > 0
+            ? upstreamPayload.detail.map((item: any) => item?.msg || item).join(", ")
+            : upstreamPayload.detail || upstreamPayload.message
+        throw new Error(detail || "Upstream service failed to generate image")
+      }
+
+      let resolvedImage: string | null = null
+      let resolvedMessage = "Image generated and saved to My Images."
+      let metadata: Record<string, any> | null = null
+      let assets: GeneratedImageAsset[] | undefined
+
+      if (typeof upstreamPayload === "string") {
+        resolvedImage = `data:image/jpeg;base64,${upstreamPayload}`
+      } else if (upstreamPayload && typeof upstreamPayload === "object") {
+        if (Array.isArray((upstreamPayload as any).images)) {
+          const rawImages = (upstreamPayload as any).images
+          assets = rawImages
+            .map((img: any) => {
+              if (!img?.s3_url) return undefined
+              return {
+                color: img?.color || undefined,
+                url: img.s3_url as string,
+                key: img?.s3_key || undefined,
+              }
+            })
+            .filter(Boolean) as GeneratedImageAsset[]
+          resolvedImage = assets[0]?.url ?? null
+        }
+
+        if (
+          !resolvedImage &&
+          typeof (upstreamPayload as any).data === "string" &&
+          (upstreamPayload as any).data.trim() !== ""
+        ) {
+          resolvedImage = `data:image/jpeg;base64,${(upstreamPayload as any).data}`
+        }
+
+        metadata =
+          typeof (upstreamPayload as any).metadata === "object" ? (upstreamPayload as any).metadata : null
+        if (typeof (upstreamPayload as any).message === "string" && (upstreamPayload as any).message.trim() !== "") {
+          resolvedMessage = (upstreamPayload as any).message
+        }
+      }
+
+      if (!resolvedImage) {
         throw new Error("No image returned from generator")
       }
-  
-      setGeneratedImage(image)
+
+      setGeneratedImage(resolvedImage)
       saveGeneratedImage({
-        image,
+        image: resolvedImage,
         prompt: updatedData.prompt,
         product: {
           styleCode: updatedData.selectedProduct.styleCode,
@@ -143,8 +206,11 @@ export default function CreatorImageGenerationPage() {
           productType: updatedData.selectedProduct.productType || "",
         },
         selectedColors: updatedData.selectedColors ?? [],
+        source: resolvedImage.startsWith("data:") ? "base64" : "url",
+        metadata,
+        assets,
       })
-      setSuccessMessage("Image generated and saved to My Images.");
+      setSuccessMessage(resolvedMessage || "Image generated and saved to My Images.")
     } catch (error:any) {
       console.error("Image generation error:", error)
       alert(error.message || "There was an issue generating the image. Please try again.")

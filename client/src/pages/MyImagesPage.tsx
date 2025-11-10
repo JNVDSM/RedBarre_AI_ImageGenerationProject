@@ -103,7 +103,20 @@ export default function MyImagesPage() {
             No images yet. Generate artwork to populate your image library.
           </div>
         ) : (
-          Object.entries(groupedImages).map(([styleCode, entries]) => (
+          Object.entries(groupedImages).map(([styleCode, entries]) => {
+            const colourTags =
+              entries[0].selectedColors && entries[0].selectedColors.length > 0
+                ? entries[0].selectedColors
+                : Array.from(
+                    new Set(
+                      entries.flatMap((entry) =>
+                        entry.assets?.map((asset) => asset.color).filter((color): color is string => Boolean(color)) ??
+                        [],
+                      ),
+                    ),
+                  )
+
+            return (
             <div key={styleCode} className="space-y-4">
               <div>
                 <h2 className="text-xl font-semibold">
@@ -112,9 +125,9 @@ export default function MyImagesPage() {
                 {entries[0].product.productType && (
                   <p className="text-sm text-gray-500">{entries[0].product.productType}</p>
                 )}
-                {entries[0].selectedColors.length > 0 && (
+                {colourTags.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {entries[0].selectedColors.map((color) => (
+                    {colourTags.map((color) => (
                       <span
                         key={color}
                         className="inline-flex items-center gap-2 text-xs bg-[#252525] border border-[#2f2f2f] px-2 py-1 rounded-full"
@@ -148,12 +161,54 @@ export default function MyImagesPage() {
                       <div className="text-xs uppercase text-gray-500">
                         {new Date(entry.createdAt).toLocaleString()}
                       </div>
+                      {entry.metadata && (
+                        <div className="text-xs text-gray-400 space-y-1">
+                          {entry.metadata?.orientation && (
+                            <div>Orientation: {String(entry.metadata.orientation)}</div>
+                          )}
+                          {entry.metadata?.image_type && (
+                            <div>Type: {String(entry.metadata.image_type)}</div>
+                          )}
+                          {typeof entry.metadata?.show_full_body === "boolean" && (
+                            <div>Full Body: {entry.metadata.show_full_body ? "Yes" : "No"}</div>
+                          )}
+                          {typeof entry.metadata?.has_logo === "boolean" && (
+                            <div>Logo Included: {entry.metadata.has_logo ? "Yes" : "No"}</div>
+                          )}
+                        </div>
+                      )}
+                      {entry.assets?.length ? (
+                        <div className="text-xs text-gray-300 space-y-2">
+                          <div className="font-semibold text-gray-400">Assets</div>
+                          <div className="flex flex-wrap gap-2">
+                            {entry.assets.map((asset, index) => (
+                              <a
+                                key={asset.key || `${entry.id}-asset-${index}`}
+                                href={asset.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 rounded border border-[#2a2a2a] bg-[#181818] px-2 py-1 hover:border-[#3a3a3a]"
+                              >
+                                {asset.color && (
+                                  <span
+                                    className="w-3 h-3 rounded-full border border-[#111]"
+                                    style={getColourStyle(asset.color)}
+                                    title={asset.color}
+                                  />
+                                )}
+                                <span>{asset.color ?? "Download"}</span>
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 ))}
               </div>
             </div>
-          ))
+          )
+          })
         )}
       </div>
     </div>
